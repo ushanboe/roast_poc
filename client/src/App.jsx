@@ -310,7 +310,7 @@ export default function App() {
       <header>
         <h1>Roast My Screenshot (POC)</h1>
         <p className="sub">
-          Upload a screenshot. Get a playful roast + chaos score. (Crop/blur private chats.)
+          Upload a screenshot. Get a playful roast you can copy as a reply. (Crop/blur private chats.)
         </p>
       </header>
 
@@ -394,32 +394,15 @@ export default function App() {
 
         {result ? (
           <div className="result">
-            <div className="score">
-              Chaos score: {Number.isFinite(result.chaosScore) ? `${result.chaosScore}/100` : "?"}
-            </div>
             <pre className="roast">{result.roast}</pre>
-            {Array.isArray(result.tags) && result.tags.length ? (
-              <div className="tags">
-                {result.tags.map((t) => (
-                  <span className="tag" key={t}>
-                    #{t}
-                  </span>
-                ))}
-              </div>
-            ) : null}
 
             <div className="row" style={{ marginTop: 12 }}>
-              <button onClick={previewShareCard}>Preview share card</button>
-              <button onClick={downloadShareCard}>Download share card</button>
-              <button onClick={openShareCardInNewTab} disabled={!shareCardDataUrl}>
-                Open card in new tab
-              </button>
               <button
                 onClick={async () => {
-                  dbg("Copy roast clicked");
+                  dbg("Copy reply clicked");
                   try {
                     await navigator.clipboard.writeText(result.roast);
-                    dbg("Clipboard write OK");
+                    dbg("Clipboard write OK (reply text)");
                   } catch (e) {
                     dbg(`Clipboard write FAILED: ${e?.message || String(e)}`);
                     setError(e?.message || String(e));
@@ -427,7 +410,13 @@ export default function App() {
                 }}
                 disabled={!navigator.clipboard}
               >
-                Copy roast
+                Copy as reply
+              </button>
+
+              <button onClick={previewShareCard}>Preview share card</button>
+              <button onClick={downloadShareCard}>Download share card</button>
+              <button onClick={openShareCardInNewTab} disabled={!shareCardDataUrl}>
+                Open card in new tab
               </button>
             </div>
 
