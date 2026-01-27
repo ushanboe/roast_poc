@@ -26,8 +26,25 @@ async function blurDataUrl(dataUrl, blurPx = 10) {
   ctx.drawImage(img, 0, 0);
   ctx.filter = "none";
 
-  // PNG keeps compatibility across browsers/APIs.
   return canvas.toDataURL("image/png");
+}
+
+async function resizeDataUrl(dataUrl, maxDim = 1024, mime = "image/jpeg", quality = 0.86) {
+  const img = await dataUrlToImage(dataUrl);
+  const w0 = img.width;
+  const h0 = img.height;
+  const scale = Math.min(1, maxDim / Math.max(w0, h0));
+  const w = Math.max(1, Math.round(w0 * scale));
+  const h = Math.max(1, Math.round(h0 * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas not supported");
+
+  ctx.drawImage(img, 0, 0, w, h);
+  return canvas.toDataURL(mime, quality);
 }
 
 function todayKey() {
@@ -67,6 +84,14 @@ export default function App() {
   const [tone, setTone] = useState("Brutal");
   const [blurEnabled, setBlurEnabled] = useState(false);
   const [blurPx, setBlurPx] = useState(10);
+
+  const [userApiKey, setUserApiKey] = useState(() => {
+    try {
+      return localStorage.getItem("user_openai_key") || "";
+    } catch {
+      return "";
+    }
+  });
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -138,13 +163,24 @@ export default function App() {
       let imageToSend = imageDataUrl;
       if (blurEnabled) {
         dbg("Applying privacy blur before upload…");
-        imageToSend = await blurDataUrl(imageDataUrl, blurPx);
+        imageToSend = await blurDataUrl(imageToSend, blurPx);
         dbg(`Blurred image ready (${Math.round(imageToSend.length / 1024)}KB dataURL)`);
+      }
+
+      // Resize/compress to keep payload smaller (important for serverless limits)
+      dbg("Resizing/compressing image before upload…");
+      imageToSend = await resizeDataUrl(imageToSend, 1024, "image/jpeg", 0.86);
+      dbg(`Compressed image ready (${Math.round(imageToSend.length / 1024)}KB dataURL)`);
+
+      const headers = { "Content-Type": "application/json" };
+      if (userApiKey && userApiKey.trim().length) {
+        headers["X-User-OpenAI-Key"] = userApiKey.trim();
+        dbg("Using user-provided OpenAI API key (sent to backend in header)");
       }
 
       const resp = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ imageDataUrl: imageToSend, tone }),
       });
 
@@ -356,6 +392,39 @@ export default function App() {
               onChange={(e) => setBlurEnabled(e.target.checked)}
               disabled={loading}
             />
+          </label>
+
+          <label className="tone">
+            Use your own API key
+            <input
+              type="password"
+              placeholder="sk-..."
+              value={userApiKey}
+              onChange={(e) => {
+                const v = e.target.value;
+                setUserApiKey(v);
+                try {
+                  if (v) localStorage.setItem("user_openai_key", v);
+                  else localStorage.removeItem("user_openai_key");
+                } catch {
+                  // ignore
+                }
+              }}
+              style={{ width: 220 }}
+              disabled={loading}
+            />
+            <button
+              onClick={() => {
+                setUserApiKey("");
+                try {
+                  localStorage.removeItem("user_openai_key");
+                } catch {}
+                dbg("Cleared user API key");
+              }}
+              disabled={loading}
+            >
+              Clear
+            </button>
           </label>
 
           {blurEnabled ? (
